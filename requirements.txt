@@ -1,0 +1,6 @@
+easyocr
+Pillow
+pyperclip
+keyboard
+requests
+pyqt5
