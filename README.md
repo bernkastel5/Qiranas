@@ -50,40 +50,39 @@ config.txt
     
 **Словари**
 
-Просто добавьте новые .zip-файлы в папку resources/dictionaries/ — программа подхватит их автоматически.
+Просто добавьте новые .zip-файлы в папку resources/dictionaries/ — программа подхватит их автоматически. Предустановлен арабско-английский словарь, сделанный в ходе реализации проекта.
 
 ## Запуск
-
-    ```bash
-    python main.py
-    ```
+```bash
+python main.py
+```
 
 ## Использование
 
 Получить перевод выделенного слова:
 
-    Выделите слово в тексте.
-    Нажмите Ctrl+C.
-    Нажмите горячую клавишу (по умолчанию Alt+Ctrl+Q).
-    Откроется окно с переводом и чтением из всех подключённых словарей.
+*    Выделите слово в тексте.
+*    Нажмите Ctrl+C.
+*    Нажмите горячую клавишу (по умолчанию Alt+Ctrl+Q).
+*    Откроется окно с переводом и чтением из всех подключённых словарей.
 
 Распознать текст с экрана (OCR):
 
-    Нажмите горячую клавишу для японского (по умолчанию Ctrl+Shift+Y) или арабского (по умолчанию Ctrl+Shift+A).
-    Выделите область экрана с нужным словом.
-    Откроется окно с результатом распознавания и переводом.
+*    Нажмите горячую клавишу для японского (по умолчанию Ctrl+Shift+Y) или арабского (по умолчанию Ctrl+Shift+A).
+*    Выделите область экрана с нужным словом.
+*    Откроется окно с результатом распознавания и переводом.
 
 Работа с окном результатов:
 
-    Кнопка + — добавить выбранные переводы в Anki.
-    Кнопка - напротив перевода — скрыть этот перевод (он не попадёт в карточку).
-    Двойной клик по слову или выделенному тексту — открыть новое окно с результатами для этого слова.
-    Можно выделять и копировать текст из окна.
+*    Кнопка + — добавить выбранные переводы в Anki.
+*    Кнопка - напротив перевода — скрыть этот перевод (он не попадёт в карточку).
+*    Двойной клик по слову или выделенному тексту — открыть новое окно с результатами для этого слова.
+*    Можно выделять и копировать текст из окна.
 
 Интеграция с Anki:
 
-    Карточки добавляются в колоду, указанную в config.txt (deckName), по умолчанию стоит колода Mining.
-    Для работы Anki должен быть запущен, а AnkiConnect — установлен.
+Карточки добавляются в колоду, указанную в config.txt (deckName), по умолчанию стоит колода Mining.
+Для работы Anki должен быть запущен, а AnkiConnect — установлен.
 
 Советы и ответы на возможные вопросы
 
@@ -147,40 +146,39 @@ Example content:
 
 **Dictionaries**
 
-Just add new .zip files to the resources/dictionaries/ folder — the program will pick them up automatically.
+Just add new .zip files to the resources/dictionaries/ folder — the program will pick them up automatically. An Arabic-English dictionary, created during the implementation of the project, is pre-installed.
 
 ## Running
-
-    ```bash
-    python main.py
-    ```
+```bash
+python main.py
+```
 
 ## Usage
 
 Get the translation of a selected word:
 
-    Select a word in the text.
-    Press Ctrl+C.
-    Press the hotkey (by default Alt+Ctrl+Q).
-    A window will open with the translation and reading from all connected dictionaries.
+*    Select a word in the text.
+*    Press Ctrl+C.
+*    Press the hotkey (by default Alt+Ctrl+Q).
+*    A window will open with the translation and reading from all connected dictionaries.
 
 Recognize text from the screen (OCR):
 
-    Press the hotkey for Japanese (by default Ctrl+Shift+Y) or Arabic (by default Ctrl+Shift+A).
-    Select the area of the screen with the desired word.
-    A window will open with the recognition result and translation.
+*    Press the hotkey for Japanese (by default Ctrl+Shift+Y) or Arabic (by default Ctrl+Shift+A).
+*    Select the area of the screen with the desired word.
+*    A window will open with the recognition result and translation.
 
 Working with the results window:
 
-    The + button — add the selected translations to Anki.
-    The - button next to a translation — hide this translation (it will not be added to the card).
-    Double-click on a word or selected text — open a new window with results for this word.
-    You can select and copy text from the window.
+*    The + button — add the selected translations to Anki.
+*    The - button next to a translation — hide this translation (it will not be added to the card).
+*    Double-click on a word or selected text — open a new window with results for this word.
+*    You can select and copy text from the window.
 
 Integration with Anki:
 
-    Cards are added to the deck specified in config.txt (deckName), by default the Mining deck.
-    Anki must be running and AnkiConnect must be installed.
+Cards are added to the deck specified in config.txt (deckName), by default the Mining deck.
+Anki must be running and AnkiConnect must be installed.
 
 Tips and answers to possible questions
 
