@@ -2,11 +2,13 @@
 
 import requests
 from config import read_config
+from config_manager import config_manager
 
 config = read_config('config.txt')
 deck_name = config.get('deckName', 'Mining')
 
 def add_note_to_anki(term, reading, definition):
+    deck_name = config_manager.get('deckName', 'Mining')
     fields = {
         "Key": f"{term}【{reading}】" if reading else term,
         "Word": term,

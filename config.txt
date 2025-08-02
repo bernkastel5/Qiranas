@@ -1,4 +1,4 @@
 on_hotkey_clipboard = alt+ctrl+q
-on_hotkey_ocr_ja = ctrl+shift+y
+on_hotkey_ocr_ja = alt+y
 on_hotkey_ocr_ar = ctrl+shift+a
-deckName = Mining
+deckName = Temp
