@@ -30,30 +30,36 @@ def on_hotkey_clipboard():
         print("Слово не найдено в словарях.")
 
 def on_hotkey_ocr_ja():
-    img = capture_area_with_selection()
-    text = extract_text_ja(img)
-    if not text.strip():
-        print("Текст не распознан.")
-        return
-    print(f"Распознанный текст (японский): {text}")
-    results = lookup_word_yomichan(text, dictionaries)
-    if results:
-        show_overlay(results, dictionaries)
-    else:
-        print("Слово не найдено в словарях.")
+    try:
+        img = capture_area_with_selection()
+        text = extract_text_ja(img)
+        if not text.strip():
+            print("Текст не распознан.")
+            return
+        print(f"Распознанный текст (японский): {text}")
+        results = lookup_word_yomichan(text, dictionaries)
+        if results:
+            show_overlay(results, dictionaries)
+        else:
+            print("Слово не найдено в словарях.")
+    except Exception as e:
+        print(f"Ошибка в OCR (ja): {e}")
 
 def on_hotkey_ocr_ar():
-    img = capture_area_with_selection()
-    text = extract_text_ar(img)
-    if not text.strip():
-        print("Текст не распознан.")
-        return
-    print(f"Распознанный текст (арабский): {text}")
-    results = lookup_word_yomichan(text, dictionaries)
-    if results:
-        show_overlay(results, dictionaries)
-    else:
-        print("Слово не найдено в словарях.")
+    try:
+        img = capture_area_with_selection()
+        text = extract_text_ar(img)
+        if not text.strip():
+            print("Текст не распознан.")
+            return
+        print(f"Распознанный текст (арабский): {text}")
+        results = lookup_word_yomichan(text, dictionaries)
+        if results:
+            show_overlay(results, dictionaries)
+        else:
+            print("Слово не найдено в словарях.")
+    except Exception as e:
+        print(f"Ошибка в OCR (ar): {e}")
 
 def register_all_hotkeys():
     for hotkey_id in list(current_hotkeys.values()):
