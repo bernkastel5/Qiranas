@@ -26,9 +26,6 @@ def convert_pitch_to_pattern(reading: str, pitch_value: int) -> str:
 
 
 def extract_plaintext(definition):
-    """
-    Рекурсивно извлекает только текст из сложных структур Yomichan.
-    """
     if isinstance(definition, str): return definition
     if isinstance(definition, list): return "\n".join(filter(None, [extract_plaintext(item) for item in definition]))
     if isinstance(definition, dict):
@@ -39,19 +36,16 @@ def extract_plaintext(definition):
 
 
 def load_yomichan_dictionary(zip_path):
-    # Словарь для хранения данных, разделенных по типу (term, term_meta)
     entries = {}
     try:
         with zipfile.ZipFile(zip_path, 'r') as zf:
             for name in zf.namelist():
-                # ИСПРАВЛЕНО: Заменена ненадёжная логика со split на явную startswith
                 file_key = None
                 if name.startswith('term_meta_bank_'):
                     file_key = 'term_meta'
                 elif name.startswith('term_bank_'):
                     file_key = 'term'
 
-                # Если файл не подходит, пропускаем его
                 if not file_key:
                     continue
 
@@ -77,20 +71,20 @@ def load_all_yomichan_dictionaries(directory):
             is_pitch = False
             is_freq = False
 
-            # Проверяем term_meta_bank, если он есть
             if 'term_meta' in dict_data:
                 sample = dict_data['term_meta'][:20]
+                # Проверяем на наличие 'pitch'
                 if any(isinstance(e, list) and len(e) > 1 and e[1] == 'pitch' for e in sample):
                     is_pitch = True
+                # Проверяем на наличие 'freq'
                 if any(isinstance(e, list) and len(e) > 1 and e[1] == 'freq' for e in sample):
                     is_freq = True
 
             if is_pitch:
                 pitch_dicts.append((filename, dict_data['term_meta']))
-            elif is_freq:
+            if is_freq:
                 freq_dicts.append((filename, dict_data['term_meta']))
 
-            # Словарь может быть одновременно и питч-, и основным
             if 'term' in dict_data:
                 main_dicts.append((filename, dict_data['term']))
 
@@ -112,14 +106,30 @@ def lookup_word_yomichan(text, main_dicts, freq_dicts, pitch_dicts):
                     'dict_name': fname.split('.')[0]
                 })
 
-    # 2. Поиск частотности (заглушка)
+    readings_found = {res['reading'] for res in results if res.get('reading')}
+
+    # 2. Поиск частотности
     freq_results = []
+    if freq_dicts:
+        for fname, dict_entries in freq_dicts:
+            for entry in dict_entries:
+                # Формат: [термин, "freq", {"reading": "...", "value": N}] или [термин, "freq", N]
+                if isinstance(entry, list) and len(entry) > 1 and entry[0] == search and entry[1] == 'freq':
+                    freq_value = None
+                    if isinstance(entry[2], dict):
+                        # Для словарей, где чтение указано, проверяем его
+                        if 'reading' not in entry[2] or entry[2]['reading'] in readings_found:
+                            freq_value = entry[2].get('value')
+                    elif isinstance(entry[2], int):
+                        freq_value = entry[2]
+
+                    if freq_value is not None:
+                        freq_results.append((fname, freq_value))
+                        break
 
     # 3. Поиск питча
     pitch_results = []
     if results and pitch_dicts:
-        readings_found = {res['reading'] for res in results if res.get('reading')}
-
         for fname, dict_entries in pitch_dicts:
             for entry in dict_entries:
                 if isinstance(entry, list) and len(entry) == 3 and entry[0] == search and entry[1] == 'pitch':
@@ -134,12 +144,8 @@ def lookup_word_yomichan(text, main_dicts, freq_dicts, pitch_dicts):
                                 if pattern:
                                     pitch_results.append((fname, pattern, reading_from_pitch_dict))
 
-    # Если для основного чтения питч не найден, а для других чтений есть, надо отобразить
-    # Переделываем, как питч отдается, чтобы он был привязан к чтению.
-    # Для простоты пока оставим как есть, в overlay.py будет использоваться чтение из results[0]
     final_pitch_results = []
     if pitch_results:
-        # Для отображения в overlay.py пока берем питч, который соответствует первому чтению
         primary_reading = results[0].get('reading')
         for fname, pattern, reading in pitch_results:
             if reading == primary_reading:
