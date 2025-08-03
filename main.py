@@ -10,7 +10,8 @@ from config import read_config
 from config_manager import ConfigManager
 
 DICTIONARIES_DIR = 'resources/dictionaries'
-dictionaries = load_all_yomichan_dictionaries(DICTIONARIES_DIR)
+main_dicts, freq_dicts, pitch_dicts = load_all_yomichan_dictionaries(DICTIONARIES_DIR)
+dictionaries = (main_dicts, freq_dicts, pitch_dicts)
 config = read_config('config.txt')
 
 config_manager = ConfigManager('config.txt')
@@ -23,9 +24,9 @@ def on_hotkey_clipboard():
         return
     first_word = selected_text.strip().split()[0]
     print(f"Первое слово: {first_word}")
-    results = lookup_word_yomichan(first_word, dictionaries)
+    results, freq_results, pitch_results = lookup_word_yomichan(first_word, *dictionaries)
     if results:
-        show_overlay(results, dictionaries)
+        show_overlay(results, freq_results, pitch_results, dictionaries)
     else:
         print("Слово не найдено в словарях.")
 
@@ -37,9 +38,9 @@ def on_hotkey_ocr_ja():
             print("Текст не распознан.")
             return
         print(f"Распознанный текст (японский): {text}")
-        results = lookup_word_yomichan(text, dictionaries)
+        results, freq_results, pitch_results = lookup_word_yomichan(text, *dictionaries)
         if results:
-            show_overlay(results, dictionaries)
+            show_overlay(results, freq_results, pitch_results, dictionaries)
         else:
             print("Слово не найдено в словарях.")
     except Exception as e:
@@ -53,9 +54,9 @@ def on_hotkey_ocr_ar():
             print("Текст не распознан.")
             return
         print(f"Распознанный текст (арабский): {text}")
-        results = lookup_word_yomichan(text, dictionaries)
+        results, freq_results, pitch_results = lookup_word_yomichan(text, *dictionaries)
         if results:
-            show_overlay(results, dictionaries)
+            show_overlay(results, freq_results, pitch_results, dictionaries)
         else:
             print("Слово не найдено в словарях.")
     except Exception as e:
