@@ -1,0 +1,22 @@
+{
+  "ai_services": [
+    {
+      "name": "Gemini",
+      "url_template": "https://gemini.google.com/app?q={prompt}"
+    },
+    {
+      "name": "ChatGPT",
+      "url_template": "https://chat.openai.com/?q={prompt}"
+    },
+    {
+      "name": "DeepSeek",
+      "url_template": "https://chat.deepseek.com/chat"
+    },
+    {
+      "name": "Мой кастомный AI",
+      "url_template": "https://"
+    }
+  ],
+  "default_service_name": "ChatGPT",
+  "prompt_template": "Объясни использование '{selection}' на русском языке. Приведи примеры и переводы."
+}
