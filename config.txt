@@ -1,4 +1,0 @@
-on_hotkey_clipboard = ctrl+shift+t
-on_hotkey_ocr_ja = ctrl+shift+y
-on_hotkey_ocr_ar = ctrl+shift+a
-deckName = Mining

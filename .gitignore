@@ -1,20 +1,23 @@
-__pycache__/
-*.py[cod]
-*$py.class
-
-.venv/
-env/
+# Виртуальное окружение
 venv/
+.venv/
+__pycache__/
+*.pyc
 
+# Настройки IDE
 .idea/
 .vscode/
 
-.DS_Store
-Thumbs.db
+# Секретные данные (Ключи API)
+config.txt
 
-dist/
+# Словари и база данных (Они огромные)
+resources/dictionaries/*.zip
+resources/dictionaries/*.db
+dictionaries.db
+
+# Папки сборки (для EXE)
 build/
+dist/
 *.spec
-
-.ipynb_checkpoints/
-*.log
+settings.json

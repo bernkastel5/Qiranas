@@ -1,27 +1,26 @@
 # dictionary.py
 
 import zipfile
-import json
+import orjson
 import os
+import sqlite3
+import gc  # Garbage Collector для принудительной очистки памяти
+
+DB_FILENAME = "dictionaries.db"
 
 
 def convert_pitch_to_pattern(reading: str, pitch_value: int) -> str:
-    """
-    Конвертирует числовое значение питча (стиль Yomichan) в бинарную строку.
-    """
     mora_count = len(reading)
     if mora_count == 0 or pitch_value < 0:
         return ""
-
-    if pitch_value == 0:  # Heiban
+    if pitch_value == 0:
         return "0" + "1" * (mora_count - 1) + "0" if mora_count > 1 else "10"
-    elif pitch_value == 1:  # Atamadaka
+    elif pitch_value == 1:
         return "1" + "0" * mora_count
-    elif pitch_value == mora_count:  # Odaka
+    elif pitch_value == mora_count:
         return "0" + "1" * (mora_count - 1) + "0"
-    elif 1 < pitch_value < mora_count:  # Nakadaka
+    elif 1 < pitch_value < mora_count:
         return "0" + "1" * (pitch_value - 1) + "0" * (mora_count - pitch_value + 1)
-
     return ""
 
 
@@ -35,120 +34,142 @@ def extract_plaintext(definition):
     return ""
 
 
-def load_yomichan_dictionary(zip_path):
-    entries = {}
+def init_db(db_path):
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    c.execute('PRAGMA synchronous = OFF')  # Ускоряет запись
+    c.execute('PRAGMA journal_mode = MEMORY')  # Ускоряет запись
+
+    c.execute('''CREATE TABLE IF NOT EXISTS main_dict (
+                    term TEXT, reading TEXT, pos TEXT, definition TEXT, dict_name TEXT
+                )''')
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_main_term ON main_dict (term)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS meta_dict (
+                    term TEXT, mode TEXT, reading TEXT, value INTEGER, dict_name TEXT
+                )''')
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_meta_term ON meta_dict (term)''')
+    conn.commit()
+    return conn
+
+
+def import_zip_to_db(zip_path, conn):
     try:
+        dict_name = os.path.basename(zip_path).replace('.zip', '')
+        c = conn.cursor()
+
         with zipfile.ZipFile(zip_path, 'r') as zf:
             for name in zf.namelist():
-                file_key = None
-                if name.startswith('term_meta_bank_'):
-                    file_key = 'term_meta'
-                elif name.startswith('term_bank_'):
-                    file_key = 'term'
+                if name.startswith('term_bank_'):
+                    with zf.open(name) as f:
+                        # orjson.loads работает быстрее и читает bytes напрямую
+                        data = orjson.loads(f.read())
+                        rows = []
+                        for entry in data:
+                            if isinstance(entry, list) and len(entry) > 5:
+                                definition_text = extract_plaintext(entry[5])
+                                rows.append((entry[0], entry[1], entry[2], definition_text, dict_name))
+                        if rows:
+                            c.executemany("INSERT INTO main_dict VALUES (?, ?, ?, ?, ?)", rows)
 
-                if not file_key:
-                    continue
+                elif name.startswith('term_meta_bank_'):
+                    with zf.open(name) as f:
+                        data = orjson.loads(f.read())
+                        meta_rows = []
+                        for entry in data:
+                            if isinstance(entry, list) and len(entry) >= 3:
+                                term = entry[0]
+                                mode = entry[1]
+                                content = entry[2]
+                                if mode == 'freq':
+                                    freq_val = None
+                                    reading = None
+                                    if isinstance(content, int):
+                                        freq_val = content
+                                    elif isinstance(content, dict):
+                                        freq_val = content.get('value')
+                                        reading = content.get('reading')
+                                    if freq_val is not None:
+                                        meta_rows.append((term, 'freq', reading, freq_val, dict_name))
+                                elif mode == 'pitch':
+                                    if isinstance(content, dict):
+                                        reading = content.get('reading')
+                                        pitches = content.get('pitches', [])
+                                        if pitches:
+                                            pos_val = pitches[0].get('position')
+                                            if pos_val is not None:
+                                                meta_rows.append((term, 'pitch', reading, pos_val, dict_name))
+                        if meta_rows:
+                            c.executemany("INSERT INTO meta_dict VALUES (?, ?, ?, ?, ?)", meta_rows)
 
-                with zf.open(name) as f:
-                    if file_key not in entries:
-                        entries[file_key] = []
-                    entries[file_key].extend(json.load(f))
-    except (zipfile.BadZipFile, json.JSONDecodeError) as e:
-        print(f"Ошибка при чтении словаря {zip_path}: {e}")
-    return entries
+            conn.commit()
+            print(f"Импортирован: {dict_name}")
+
+        # Принудительная очистка памяти после каждого тяжелого словаря
+        gc.collect()
+
+    except Exception as e:
+        print(f"Ошибка при чтении {zip_path}: {e}")
 
 
 def load_all_yomichan_dictionaries(directory):
-    main_dicts = []
-    freq_dicts = []
-    pitch_dicts = []
-    for filename in os.listdir(directory):
-        if filename.endswith('.zip'):
-            path = os.path.join(directory, filename)
-            print(f"Загружаю словарь: {filename}")
-            dict_data = load_yomichan_dictionary(path)
-
-            is_pitch = False
-            is_freq = False
-
-            if 'term_meta' in dict_data:
-                sample = dict_data['term_meta'][:20]
-                # Проверяем на наличие 'pitch'
-                if any(isinstance(e, list) and len(e) > 1 and e[1] == 'pitch' for e in sample):
-                    is_pitch = True
-                # Проверяем на наличие 'freq'
-                if any(isinstance(e, list) and len(e) > 1 and e[1] == 'freq' for e in sample):
-                    is_freq = True
-
-            if is_pitch:
-                pitch_dicts.append((filename, dict_data['term_meta']))
-            if is_freq:
-                freq_dicts.append((filename, dict_data['term_meta']))
-
-            if 'term' in dict_data:
-                main_dicts.append((filename, dict_data['term']))
-
-    print(f"Загружено: {len(main_dicts)} основных, {len(freq_dicts)} частотных, {len(pitch_dicts)} питч-словарей.")
-    return main_dicts, freq_dicts, pitch_dicts
+    db_path = os.path.join(directory, DB_FILENAME)
+    if not os.path.exists(db_path):
+        print("Создание базы данных словарей (с использованием orjson)...")
+        conn = init_db(db_path)
+        files = [f for f in os.listdir(directory) if f.endswith('.zip')]
+        for i, filename in enumerate(files):
+            print(f"Обработка [{i + 1}/{len(files)}]: {filename}")
+            import_zip_to_db(os.path.join(directory, filename), conn)
+        conn.commit()
+        conn.close()
+        print("База данных готова!")
+        gc.collect()
+    else:
+        print("Найдена существующая база данных словарей.")
+    return db_path, None, None
 
 
-def lookup_word_yomichan(text, main_dicts, freq_dicts, pitch_dicts):
+def lookup_word_yomichan(text, db_path, _freq_ignored, _pitch_ignored):
     results = []
-    search = text.strip()
-
-    # 1. Поиск в основных словарях
-    for fname, dict_entries in main_dicts:
-        for entry in dict_entries:
-            if isinstance(entry, list) and len(entry) > 5 and entry[0] == search:
-                results.append({
-                    'term': entry[0], 'reading': entry[1], 'pos': entry[2],
-                    'definition': extract_plaintext(entry[5]),
-                    'dict_name': fname.split('.')[0]
-                })
-
-    readings_found = {res['reading'] for res in results if res.get('reading')}
-
-    # 2. Поиск частотности
     freq_results = []
-    if freq_dicts:
-        for fname, dict_entries in freq_dicts:
-            for entry in dict_entries:
-                # Формат: [термин, "freq", {"reading": "...", "value": N}] или [термин, "freq", N]
-                if isinstance(entry, list) and len(entry) > 1 and entry[0] == search and entry[1] == 'freq':
-                    freq_value = None
-                    if isinstance(entry[2], dict):
-                        # Для словарей, где чтение указано, проверяем его
-                        if 'reading' not in entry[2] or entry[2]['reading'] in readings_found:
-                            freq_value = entry[2].get('value')
-                    elif isinstance(entry[2], int):
-                        freq_value = entry[2]
-
-                    if freq_value is not None:
-                        freq_results.append((fname, freq_value))
-                        break
-
-    # 3. Поиск питча
     pitch_results = []
-    if results and pitch_dicts:
-        for fname, dict_entries in pitch_dicts:
-            for entry in dict_entries:
-                if isinstance(entry, list) and len(entry) == 3 and entry[0] == search and entry[1] == 'pitch':
-                    pitch_data_obj = entry[2]
-                    reading_from_pitch_dict = pitch_data_obj.get('reading')
+    search = text.strip()
+    if not search or not db_path:
+        return [], [], []
 
-                    if reading_from_pitch_dict in readings_found:
-                        if pitch_data_obj.get('pitches') and len(pitch_data_obj['pitches']) > 0:
-                            pitch_value = pitch_data_obj['pitches'][0].get('position')
-                            if pitch_value is not None:
-                                pattern = convert_pitch_to_pattern(reading_from_pitch_dict, pitch_value)
-                                if pattern:
-                                    pitch_results.append((fname, pattern, reading_from_pitch_dict))
+    try:
+        # Используем контекстный менеджер для авто-закрытия
+        with sqlite3.connect(db_path) as conn:
+            c = conn.cursor()
 
-    final_pitch_results = []
-    if pitch_results:
-        primary_reading = results[0].get('reading')
-        for fname, pattern, reading in pitch_results:
-            if reading == primary_reading:
-                final_pitch_results.append((fname, pattern))
+            c.execute("SELECT term, reading, pos, definition, dict_name FROM main_dict WHERE term = ?", (search,))
+            rows = c.fetchall()
 
-    return results, freq_results, final_pitch_results
+            readings_found = set()
+            for r in rows:
+                term, reading, pos, definition, dict_name = r
+                results.append({
+                    'term': term, 'reading': reading, 'pos': pos,
+                    'definition': definition, 'dict_name': dict_name
+                })
+                if reading: readings_found.add(reading)
+
+            c.execute("SELECT dict_name, reading, value FROM meta_dict WHERE term = ? AND mode = 'freq'", (search,))
+            for r in c.fetchall():
+                d_name, reading, val = r
+                if reading is None or reading in readings_found:
+                    freq_results.append((d_name, val))
+
+            c.execute("SELECT dict_name, reading, value FROM meta_dict WHERE term = ? AND mode = 'pitch'", (search,))
+            primary_reading = results[0]['reading'] if results else None
+            for r in c.fetchall():
+                d_name, reading, pos_val = r
+                if reading and reading in readings_found:
+                    pattern = convert_pitch_to_pattern(reading, pos_val)
+                    if pattern:
+                        if primary_reading and reading == primary_reading:
+                            pitch_results.append((d_name, pattern))
+    except Exception as e:
+        print(f"Ошибка поиска в БД: {e}")
+
+    return results, freq_results, pitch_results

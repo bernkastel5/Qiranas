@@ -1,0 +1,7 @@
+openrouter_api_key=
+openrouter_model=meta-llama/llama-3-8b-instruct:free
+google_api_key=
+on_hotkey_clipboard=ctrl+shift+t
+on_hotkey_ocr_ja=ctrl+shift+y
+on_hotkey_ocr_ar=ctrl+shift+a
+deckName=Mining
