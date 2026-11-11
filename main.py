@@ -7,20 +7,18 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QObject, Signal, Slot
 
 from hotkey_manager import register_hotkey, unregister_hotkey
-from screen_capture import capture_area_with_selection
+# Импортируем наш новый класс
+from screen_capture import get_snipper
 from text_extractor import extract_text_ja, extract_text_ar
 from dictionary import load_all_yomichan_dictionaries, lookup_word_yomichan
 from overlay import show_overlay
 from clipboard_utils import get_selected_text
 from config_manager import ConfigManager
 
-# --- Глобальная инициализация Словарей ---
-# Делаем это ДО запуска Qt приложения
+# --- Инициализация ---
 DICTIONARIES_DIR = 'resources/dictionaries'
-print("Загрузка словарей (подключение к SQLite)...")
-# Теперь это просто путь к БД, но для совместимости распаковываем
+print("Загрузка словарей...")
 db_path, _, _ = load_all_yomichan_dictionaries(DICTIONARIES_DIR)
-# Упаковываем обратно, чтобы передавать в функции
 dictionaries = (db_path, None, None)
 print("Словари готовы.")
 
@@ -28,112 +26,124 @@ config_manager = ConfigManager('config.txt')
 current_hotkeys = {}
 
 
-# --- МОСТ МЕЖДУ ПОТОКАМИ (Qt Signal Bridge) ---
+# --- BRIDGE (Мост между потоками) ---
 class SignalBridge(QObject):
-    """
-    Этот класс нужен, чтобы безопасно передавать данные из фонового потока (hotkey)
-    в главный поток (GUI).
-    """
-    request_show_overlay = Signal(str)  # Сигнал, несущий текст для поиска
+    request_show_overlay = Signal(str)  # Показать результат (для Clipboard)
+    request_start_ocr = Signal(str)  # Запустить процесс OCR ('ja' или 'ar')
 
     def __init__(self):
         super().__init__()
-        # Подключаем сигнал к слоту (функции обработки)
         self.request_show_overlay.connect(self.handle_show_request)
+        self.request_start_ocr.connect(self.handle_start_ocr)
+
+        # Переменная, чтобы помнить, какой язык мы сейчас скриним
+        self.current_lang_mode = 'ja'
+
+        # Подключаем сигнал от самого скриншотера
+        self.snipper = get_snipper()
+        self.snipper.captured.connect(self.handle_image_captured)
 
     @Slot(str)
     def handle_show_request(self, text):
-        """Эта функция выполнится СТРОГО в главном потоке."""
+        """Обработка готового текста (из буфера или после OCR)"""
         if not text: return
-
-        # 1. Поиск в БД (SQLite быстрый, можно делать и в UI потоке)
         results, freq_results, pitch_results = lookup_word_yomichan(text, *dictionaries)
-
-        # 2. Открытие окна
         show_overlay(text, results, freq_results, pitch_results, dictionaries)
+
+    @Slot(str)
+    def handle_start_ocr(self, lang):
+        """Запуск скриншотера (выполняется в GUI потоке)"""
+        self.current_lang_mode = lang
+        self.snipper.start_snip()
+
+    @Slot(object)
+    def handle_image_captured(self, image):
+        """Когда пользователь выделил область и отпустил мышь"""
+        if image is None:
+            print("Выделение отменено.")
+            return
+
+        print("Скриншот получен, распознавание...")
+
+        # Важно: Распознавание (особенно EasyOCR) может быть долгим.
+        # Чтобы интерфейс не завис намертво, лучше запустить это в отдельном потоке.
+        threading.Thread(target=self._process_ocr_in_background, args=(image, self.current_lang_mode),
+                         daemon=True).start()
+
+    def _process_ocr_in_background(self, image, lang):
+        try:
+            text = ""
+            if lang == 'ja':
+                text = extract_text_ja(image).strip()
+                print(f"OCR JA: {text}")
+            elif lang == 'ar':
+                text = extract_text_ar(image).strip()
+                print(f"OCR AR: {text}")
+
+            if text:
+                # Результат отправляем обратно в GUI через сигнал
+                self.request_show_overlay.emit(text)
+        except Exception as e:
+            print(f"Ошибка распознавания: {e}")
 
 
 # Создаем глобальный мост
 bridge = None
 
 
-# --- Обработчики горячих клавиш (Выполняются в фоновом потоке) ---
+# --- Хоткеи (Фоновый поток) ---
 def on_hotkey_clipboard():
     selected_text = get_selected_text()
     if selected_text:
-        # Берем первое слово и отправляем сигнал главному потоку
         first_word = selected_text.strip().split()[0]
-        print(f"Clipboard: {first_word}")
         bridge.request_show_overlay.emit(first_word)
     else:
-        print("Не удалось получить выделенный текст.")
+        print("Не удалось получить текст из буфера.")
 
 
 def on_hotkey_ocr_ja():
-    try:
-        # Скриншот и OCR делаем в фоне, чтобы не морозить GUI
-        img = capture_area_with_selection()
-        if img:
-            text = extract_text_ja(img).strip()
-            print(f"OCR JA: {text}")
-            bridge.request_show_overlay.emit(text)
-    except Exception as e:
-        print(f"Ошибка в OCR (ja): {e}")
+    # Просто просим главный поток начать процесс
+    bridge.request_start_ocr.emit('ja')
 
 
 def on_hotkey_ocr_ar():
-    try:
-        img = capture_area_with_selection()
-        if img:
-            text = extract_text_ar(img).strip()
-            print(f"OCR AR: {text}")
-            bridge.request_show_overlay.emit(text)
-    except Exception as e:
-        print(f"Ошибка в OCR (ar): {e}")
+    bridge.request_start_ocr.emit('ar')
 
 
-# --- Управление горячими клавишами ---
+# --- Регистрация ---
 def register_all_hotkeys():
     for hotkey_id in current_hotkeys.values():
         try:
             unregister_hotkey(hotkey_id)
-        except Exception as e:
-            print(f"Ошибка при удалении старого хоткея: {e}")
+        except Exception:
+            pass
     current_hotkeys.clear()
 
-    key_clipboard = config_manager.get('on_hotkey_clipboard', 'ctrl+shift+t')
-    key_ocr_ja = config_manager.get('on_hotkey_ocr_ja', 'ctrl+shift+y')
-    key_ocr_ar = config_manager.get('on_hotkey_ocr_ar', 'ctrl+shift+a')
+    key_clip = config_manager.get('on_hotkey_clipboard', 'ctrl+shift+t')
+    key_ja = config_manager.get('on_hotkey_ocr_ja', 'ctrl+shift+y')
+    key_ar = config_manager.get('on_hotkey_ocr_ar', 'ctrl+shift+a')
 
-    current_hotkeys['clipboard'] = register_hotkey(key_clipboard, on_hotkey_clipboard)
-    current_hotkeys['ocr_ja'] = register_hotkey(key_ocr_ja, on_hotkey_ocr_ja)
-    current_hotkeys['ocr_ar'] = register_hotkey(key_ocr_ar, on_hotkey_ocr_ar)
+    current_hotkeys['clipboard'] = register_hotkey(key_clip, on_hotkey_clipboard)
+    current_hotkeys['ocr_ja'] = register_hotkey(key_ja, on_hotkey_ocr_ja)
+    current_hotkeys['ocr_ar'] = register_hotkey(key_ar, on_hotkey_ocr_ar)
 
-    print(f"Хоткеи обновлены: Clip={key_clipboard}, JP={key_ocr_ja}, AR={key_ocr_ar}")
+    print(f"Хоткеи: {key_clip} - буфер обмена, {key_ja} - OCR японский, {key_ar} - OCR арабский")
 
 
 if __name__ == "__main__":
-    # 1. Создаем Qt Application (обязательно в главном потоке)
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)  # Не закрывать программу без окон
 
-    # Чтобы приложение не закрывалось, когда закрыто последнее окно словаря
-    app.setQuitOnLastWindowClosed(False)
-
-    # 2. Инициализируем мост
     bridge = SignalBridge()
 
-    # 3. Регистрируем хоткеи
     config_manager.on_change(lambda conf: register_all_hotkeys())
     register_all_hotkeys()
 
-    print("Программа запущена. Qt Event Loop активен.")
+    print("Qiranas запущен. Нажмите хоткеи для работы.")
 
-    # 4. Запускаем бесконечный цикл обработки событий Qt.
-    # Вместо keyboard.wait() теперь работает app.exec().
-    # Библиотека keyboard продолжает работать в своих фоновых потоках.
     try:
         sys.exit(app.exec())
     except KeyboardInterrupt:
-        print("\nВыход...")
+        print("Выход...")
     finally:
         config_manager.stop()

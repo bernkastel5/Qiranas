@@ -21,3 +21,11 @@ build/
 dist/
 *.spec
 settings.json
+
+# Служебные данные агента и отладочные скриншоты
+.mimocode/
+debug_screens/
+
+# Отключённые ресурсы
+resources/disabled/*
+!resources/disabled/.gitkeep
