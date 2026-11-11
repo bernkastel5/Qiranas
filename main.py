@@ -127,7 +127,7 @@ def register_all_hotkeys():
     current_hotkeys['ocr_ja'] = register_hotkey(key_ja, on_hotkey_ocr_ja)
     current_hotkeys['ocr_ar'] = register_hotkey(key_ar, on_hotkey_ocr_ar)
 
-    print(f"Хоткеи: {key_clip}, {key_ja}, {key_ar}")
+    print(f"Хоткеи: {key_clip} - буфер обмена, {key_ja} - OCR японский, {key_ar} - OCR арабский")
 
 
 if __name__ == "__main__":
